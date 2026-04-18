@@ -1,0 +1,117 @@
+import os
+import yaml
+import shutil
+
+CONFIG_FILE = ".regiswitch.yaml"
+STORAGE_DIR = ".regiswitch/versions"
+
+class ConfigManager:
+    def __init__(self, config_file=CONFIG_FILE, storage_dir=STORAGE_DIR):
+        self.config_file = config_file
+        self.storage_dir = storage_dir
+        self.config = None
+
+    def exists(self):
+        return os.path.exists(self.config_file)
+
+    def load(self):
+        if not self.exists():
+            return None
+        with open(self.config_file, 'r') as f:
+            self.config = yaml.safe_load(f)
+        return self.config
+
+    def save(self, config=None):
+        if config:
+            self.config = config
+        with open(self.config_file, 'w') as f:
+            yaml.dump(self.config, f, default_flow_style=False)
+
+    def init_project(self):
+        if self.exists():
+            return False, f"{self.config_file} already exists."
+        
+        self.config = {
+            "active_profile": "default",
+            "profiles": {
+                "default": {
+                    "description": "Default profile",
+                    "files": {}
+                }
+            }
+        }
+        try:
+            self.save()
+            os.makedirs(self.storage_dir, exist_ok=True)
+            return True, None
+        except Exception as e:
+            return False, str(e)
+
+    def get_profiles(self):
+        return self.config.get("profiles", {})
+
+    def get_active_profile_name(self):
+        return self.config.get("active_profile")
+
+    def set_active_profile_name(self, name):
+        self.config["active_profile"] = name
+        self.save()
+
+    def add_profile(self, name, description=""):
+        if name in self.config["profiles"]:
+            return False, f"Profile '{name}' already exists."
+        self.config["profiles"][name] = {
+            "description": description,
+            "files": {}
+        }
+        self.save()
+        return True, None
+
+    def remove_profile(self, name):
+        if name not in self.config["profiles"]:
+            return False, f"Profile '{name}' does not exist."
+        if name == "default":
+            return False, "Cannot remove the 'default' profile."
+        if name == self.get_active_profile_name():
+            return False, "Cannot remove the active profile. Switch to another profile first."
+        
+        del self.config["profiles"][name]
+        self.save()
+        return True, None
+
+    def add_file_version(self, file_path, profile_name, version_id):
+        if profile_name not in self.config["profiles"]:
+            return False, f"Profile '{profile_name}' does not exist."
+        if not os.path.exists(file_path):
+            return False, f"File '{file_path}' does not exist."
+        
+        # Store file
+        dest = os.path.join(self.storage_dir, version_id, file_path)
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        shutil.copy2(file_path, dest)
+        
+        self.config["profiles"][profile_name]["files"][file_path] = version_id
+        self.save()
+        return True, None
+
+    def get_file_version_source(self, version_id, file_path):
+        return os.path.join(self.storage_dir, version_id, file_path)
+
+    def apply_profile(self, profile_name):
+        if profile_name not in self.config["profiles"]:
+            return False, f"Profile '{profile_name}' does not exist."
+        
+        profile = self.config["profiles"][profile_name]
+        results = []
+        for file_path, version_id in profile.get("files", {}).items():
+            src = self.get_file_version_source(version_id, file_path)
+            if not os.path.exists(src):
+                results.append((file_path, version_id, False))
+                continue
+            
+            os.makedirs(os.path.dirname(os.path.abspath(file_path)), exist_ok=True)
+            shutil.copy2(src, file_path)
+            results.append((file_path, version_id, True))
+        
+        self.set_active_profile_name(profile_name)
+        return True, results

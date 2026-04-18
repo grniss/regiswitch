@@ -2,7 +2,9 @@ import unittest
 import os
 import shutil
 import yaml
-from regiswitch.main import init, CONFIG_FILE
+from regiswitch.model import ConfigManager, CONFIG_FILE
+from regiswitch.view import RegiswitchView
+from regiswitch.controller import RegiswitchController
 
 class TestInit(unittest.TestCase):
     def setUp(self):
@@ -11,6 +13,10 @@ class TestInit(unittest.TestCase):
         os.makedirs(self.test_dir, exist_ok=True)
         self.old_cwd = os.getcwd()
         os.chdir(self.test_dir)
+        
+        self.model = ConfigManager()
+        self.view = RegiswitchView()
+        self.controller = RegiswitchController(self.model, self.view)
 
     def tearDown(self):
         # Cleanup
@@ -22,7 +28,7 @@ class TestInit(unittest.TestCase):
         if os.path.exists(CONFIG_FILE):
             os.remove(CONFIG_FILE)
 
-        init()
+        self.controller.init()
 
         self.assertTrue(os.path.exists(CONFIG_FILE))
         
@@ -39,9 +45,9 @@ class TestInit(unittest.TestCase):
         with open(CONFIG_FILE, 'w') as f:
             f.write("dummy")
         
-        # init() calls sys.exit(1) if file exists, so we catch SystemExit
+        # Controller calls view.show_error which calls sys.exit(1)
         with self.assertRaises(SystemExit) as cm:
-            init()
+            self.controller.init()
         
         self.assertEqual(cm.exception.code, 1)
 
