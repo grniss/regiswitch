@@ -1,1 +1,29 @@
-.regiswitch
+# Regiswitch internal data
+.regiswitch/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.venv/
+venv/
+env/
+dist/
+build/
+*.egg-info/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+
+# Multica Agent
+.agent_context/
+AGENTS.md
+GEMINI.md
