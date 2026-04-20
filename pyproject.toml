@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "regiswitch"
+version = "0.1.0"
+description = "Switch registered files between named profiles"
+requires-python = ">=3.8"
+dependencies = ["click>=8.0"]
+
+[project.scripts]
+regiswitch = "regiswitch.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["regiswitch*"]
