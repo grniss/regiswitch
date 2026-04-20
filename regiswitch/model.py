@@ -79,6 +79,15 @@ class ConfigManager:
         self.save()
         return True, None
 
+    def _get_storage_path(self, profile_name, file_path):
+        # We need to ensure the file is stored INSIDE the profile directory.
+        # We sanitize the file_path to be relative and not contain '..' components
+        # that could escape the profile directory.
+        sanitized_path = os.path.normpath(file_path).lstrip(os.sep).replace('..' + os.sep, '')
+        if sanitized_path.startswith('..'):
+            sanitized_path = sanitized_path[2:].lstrip(os.sep)
+        return os.path.join(self.storage_dir, profile_name, sanitized_path)
+
     def add_file_to_profile(self, file_path, profile_name):
         if profile_name not in self.config["profiles"]:
             return False, f"Profile '{profile_name}' does not exist."
@@ -86,7 +95,7 @@ class ConfigManager:
             return False, f"File '{file_path}' does not exist."
         
         # Store file in profile-specific storage
-        dest = os.path.join(self.storage_dir, profile_name, file_path)
+        dest = self._get_storage_path(profile_name, file_path)
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         shutil.copy2(file_path, dest)
         
@@ -102,7 +111,7 @@ class ConfigManager:
         profile = self.config["profiles"][profile_name]
         results = []
         for file_path in profile.get("files", {}).keys():
-            src = os.path.join(self.storage_dir, profile_name, file_path)
+            src = self._get_storage_path(profile_name, file_path)
             if not os.path.exists(src):
                 results.append((file_path, False))
                 continue
