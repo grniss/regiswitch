@@ -8,7 +8,7 @@ from regiswitch.core.engine import get_status
 from regiswitch.output.console import err_console
 from regiswitch.output.tables import print_status_table
 from regiswitch.utils.errors import NotInitializedError
-from regiswitch.utils.fs import find_project_root
+from regiswitch.utils.fs import find_project_root, load_storage_backend
 
 EXIT_INPUT_ERROR = 1
 
@@ -24,7 +24,8 @@ def status() -> None:
     """
     try:
         root = find_project_root(Path.cwd())
-        result = get_status(root)
+        storage = load_storage_backend(root)
+        result = get_status(root, storage)
     except NotInitializedError as exc:
         err_console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=EXIT_INPUT_ERROR)

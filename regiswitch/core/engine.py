@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from regiswitch.models.config import RegiswitchConfig, REGISWITCH_DIR, PROFILES_DIR
+from regiswitch.core.storage import StorageBackend
+from regiswitch.models.config import RegiswitchConfig, REGISWITCH_DIR
 from regiswitch.utils.errors import (
     FileAlreadyRegisteredError,
     FileNotRegisteredError,
@@ -13,13 +13,7 @@ from regiswitch.utils.errors import (
     ProfileAlreadyExistsError,
     ProfileNotFoundError,
 )
-from regiswitch.utils.fs import (
-    copy_file_from_profile,
-    copy_file_to_profile,
-    load_config,
-    profile_has_file,
-    save_config,
-)
+from regiswitch.utils.fs import load_config, save_config
 
 
 @dataclass
@@ -39,7 +33,6 @@ def init_project(root: Path) -> None:
             f"{regiswitch_dir} already exists. Project is already initialized."
         )
     regiswitch_dir.mkdir(parents=True)
-    (regiswitch_dir / PROFILES_DIR).mkdir()
     config = RegiswitchConfig()
     save_config(root, config)
 
@@ -62,86 +55,90 @@ def unregister_file(root: Path, rel_path: str) -> None:
     save_config(root, config)
 
 
-def create_profile(root: Path, name: str) -> None:
-    """Create a new empty profile directory."""
-    config = load_config(root)
-    profile_dir = RegiswitchConfig.profile_dir(root, name)
-    if profile_dir.exists():
+def create_profile(root: Path, name: str, storage: StorageBackend) -> None:
+    """Create a new empty profile in the configured storage."""
+    if storage.profile_exists(name):
         raise ProfileAlreadyExistsError(f"Profile '{name}' already exists.")
-    profile_dir.mkdir(parents=True)
+    storage.create_profile(name)
+    config = load_config(root)
     if config.current_profile is None:
         config.current_profile = name
         save_config(root, config)
 
 
-def delete_profile(root: Path, name: str) -> None:
-    """Delete a profile directory and clear active profile if needed."""
-    profile_dir = RegiswitchConfig.profile_dir(root, name)
-    if not profile_dir.exists():
+def delete_profile(root: Path, name: str, storage: StorageBackend) -> None:
+    """Delete a profile and clear active profile if needed."""
+    if not storage.profile_exists(name):
         raise ProfileNotFoundError(f"Profile '{name}' does not exist.")
-    shutil.rmtree(profile_dir)
+    storage.delete_profile(name)
     config = load_config(root)
     if config.current_profile == name:
         config.current_profile = None
         save_config(root, config)
 
 
-def list_profiles(root: Path) -> list[str]:
-    """Return sorted list of profile names."""
-    profiles_dir = RegiswitchConfig.profiles_dir(root)
-    if not profiles_dir.exists():
-        return []
-    return sorted(p.name for p in profiles_dir.iterdir() if p.is_dir())
+def list_profiles(storage: StorageBackend) -> list[str]:
+    """Return sorted list of profile names from storage."""
+    return storage.list_profiles()
 
 
-def save_to_profile(root: Path, profile: str | None = None) -> str:
+def save_to_profile(
+    root: Path, storage: StorageBackend, profile: str | None = None
+) -> str:
     """Copy all registered files into the profile's storage. Returns profile name used."""
     config = load_config(root)
     target = profile or config.current_profile
     if target is None:
         raise NoActiveProfileError(
-            "No active profile. Specify a profile with --profile or run 'regiswitch profile create'."
+            "No active profile. Specify --profile or run 'regiswitch profile create'."
         )
-    profile_dir = RegiswitchConfig.profile_dir(root, target)
-    if not profile_dir.exists():
+    if not storage.profile_exists(target):
         raise ProfileNotFoundError(f"Profile '{target}' does not exist.")
     for rel_path in config.registered_files:
         src = root / rel_path
         if src.exists():
-            copy_file_to_profile(root, rel_path, target)
+            storage.put_file(src, rel_path, target)
     return target
 
 
-def switch_profile(root: Path, name: str) -> list[str]:
+def switch_profile(
+    root: Path, name: str, storage: StorageBackend
+) -> list[str]:
     """Replace registered files with versions from the named profile. Returns applied files."""
-    config = load_config(root)
-    profile_dir = RegiswitchConfig.profile_dir(root, name)
-    if not profile_dir.exists():
+    if not storage.profile_exists(name):
         raise ProfileNotFoundError(f"Profile '{name}' does not exist.")
+    config = load_config(root)
     applied: list[str] = []
     for rel_path in config.registered_files:
-        if profile_has_file(root, rel_path, name):
-            copy_file_from_profile(root, rel_path, name)
+        if storage.has_file(rel_path, name):
+            storage.get_file(root / rel_path, rel_path, name)
             applied.append(rel_path)
     config.current_profile = name
     save_config(root, config)
     return applied
 
 
-def get_status(root: Path) -> StatusResult:
+def get_status(root: Path, storage: StorageBackend) -> StatusResult:
     """Collect current project state for display."""
     config = load_config(root)
-    profiles = list_profiles(root)
+    profiles = list_profiles(storage)
     drift: list[str] = []
-    if config.current_profile:
+    if config.current_profile and storage.profile_exists(config.current_profile):
         for rel_path in config.registered_files:
-            stored = RegiswitchConfig.profile_dir(root, config.current_profile) / rel_path
             working = root / rel_path
-            if working.exists() and stored.exists():
-                if working.read_bytes() != stored.read_bytes():
+            if not storage.has_file(rel_path, config.current_profile):
+                if working.exists():
                     drift.append(rel_path)
-            elif working.exists() and not stored.exists():
-                drift.append(rel_path)
+            elif working.exists():
+                import tempfile, shutil
+                with tempfile.NamedTemporaryFile(delete=False) as tmp:
+                    tmp_path = Path(tmp.name)
+                try:
+                    storage.get_file(tmp_path, rel_path, config.current_profile)
+                    if working.read_bytes() != tmp_path.read_bytes():
+                        drift.append(rel_path)
+                finally:
+                    tmp_path.unlink(missing_ok=True)
     return StatusResult(
         root=root,
         current_profile=config.current_profile,

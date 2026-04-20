@@ -12,7 +12,7 @@ from regiswitch.utils.errors import (
     NotInitializedError,
     ProfileNotFoundError,
 )
-from regiswitch.utils.fs import find_project_root
+from regiswitch.utils.fs import find_project_root, load_storage_backend
 
 EXIT_OK = 0
 EXIT_INPUT_ERROR = 1
@@ -34,7 +34,8 @@ def save(
     """
     try:
         root = find_project_root(Path.cwd())
-        used_profile = save_to_profile(root, profile)
+        storage = load_storage_backend(root)
+        used_profile = save_to_profile(root, storage, profile)
     except (NotInitializedError, NoActiveProfileError, ProfileNotFoundError) as exc:
         err_console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=EXIT_INPUT_ERROR)

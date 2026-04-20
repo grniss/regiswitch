@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typer
 
+from regiswitch.commands.config import app as config_app
 from regiswitch.commands.init import init
 from regiswitch.commands.profile import app as profile_app
 from regiswitch.commands.register import register, unregister
@@ -16,6 +17,7 @@ app = typer.Typer(
 )
 
 app.command("init")(init)
+app.add_typer(config_app, name="config")
 app.add_typer(profile_app, name="profile")
 app.command("register")(register)
 app.command("unregister")(unregister)

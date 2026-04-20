@@ -15,11 +15,10 @@ from regiswitch.utils.errors import (
     ProfileNotFoundError,
     RegiswitchError,
 )
-from regiswitch.utils.fs import find_project_root, load_config
+from regiswitch.utils.fs import find_project_root, load_config, load_storage_backend
 
 EXIT_OK = 0
 EXIT_INPUT_ERROR = 1
-EXIT_RUNTIME_ERROR = 2
 
 app = typer.Typer(help="Manage profiles.")
 
@@ -35,7 +34,8 @@ def profile_create(
     try:
         validate_profile_name(name)
         root = find_project_root(Path.cwd())
-        create_profile(root, name)
+        storage = load_storage_backend(root)
+        create_profile(root, name, storage)
     except (NotInitializedError, ProfileAlreadyExistsError, RegiswitchError) as exc:
         err_console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=EXIT_INPUT_ERROR)
@@ -48,7 +48,8 @@ def profile_list() -> None:
     try:
         root = find_project_root(Path.cwd())
         config = load_config(root)
-        profiles = list_profiles(root)
+        storage = load_storage_backend(root)
+        profiles = list_profiles(storage)
     except NotInitializedError as exc:
         err_console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=EXIT_INPUT_ERROR)
@@ -77,7 +78,8 @@ def profile_delete(
             raise typer.Exit(code=EXIT_OK)
     try:
         root = find_project_root(Path.cwd())
-        delete_profile(root, name)
+        storage = load_storage_backend(root)
+        delete_profile(root, name, storage)
     except (NotInitializedError, ProfileNotFoundError) as exc:
         err_console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=EXIT_INPUT_ERROR)

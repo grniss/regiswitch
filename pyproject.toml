@@ -18,7 +18,8 @@ dependencies = [
 regiswitch = "regiswitch.cli:app"
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-cov"]
+s3 = ["boto3>=1.34"]
+dev = ["pytest>=8", "pytest-cov", "moto[s3]>=5"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

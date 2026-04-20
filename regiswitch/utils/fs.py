@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import shutil
 import tomllib
 from pathlib import Path
+from typing import Any
 
 import tomli_w
 
+from regiswitch.core.storage import StorageBackend, build_storage_backend
 from regiswitch.models.config import RegiswitchConfig, REGISWITCH_DIR
 from regiswitch.utils.errors import NotInitializedError
 
@@ -32,31 +33,25 @@ def load_config(root: Path) -> RegiswitchConfig:
     return RegiswitchConfig(**data)
 
 
+def _strip_none(obj: Any) -> Any:
+    """Recursively remove None values so tomli_w can serialize the dict."""
+    if isinstance(obj, dict):
+        return {k: _strip_none(v) for k, v in obj.items() if v is not None}
+    if isinstance(obj, list):
+        return [_strip_none(v) for v in obj]
+    return obj
+
+
 def save_config(root: Path, config: RegiswitchConfig) -> None:
     """Persist RegiswitchConfig to config.toml."""
     path = RegiswitchConfig.config_path(root)
     path.parent.mkdir(parents=True, exist_ok=True)
-    data = {k: v for k, v in config.model_dump().items() if v is not None}
+    data = _strip_none(config.model_dump())
     with path.open("wb") as f:
         tomli_w.dump(data, f)
 
 
-def copy_file_to_profile(root: Path, rel_path: str, profile: str) -> None:
-    """Copy a registered file into the profile's storage directory."""
-    src = root / rel_path
-    dest = RegiswitchConfig.profile_dir(root, profile) / rel_path
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(src, dest)
-
-
-def copy_file_from_profile(root: Path, rel_path: str, profile: str) -> None:
-    """Restore a file from a profile's storage directory to the working tree."""
-    src = RegiswitchConfig.profile_dir(root, profile) / rel_path
-    dest = root / rel_path
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(src, dest)
-
-
-def profile_has_file(root: Path, rel_path: str, profile: str) -> bool:
-    """Return True if the profile has a stored copy of rel_path."""
-    return (RegiswitchConfig.profile_dir(root, profile) / rel_path).exists()
+def load_storage_backend(root: Path) -> StorageBackend:
+    """Load config and construct the configured storage backend."""
+    config = load_config(root)
+    return build_storage_backend(config.storage, root)

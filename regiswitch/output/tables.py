@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from rich.table import Table
 
+from regiswitch.models.config import LocalStorageConfig, RegiswitchConfig, S3StorageConfig
 from regiswitch.output.console import console
 
 
@@ -46,4 +47,28 @@ def print_status_table(
             "[yellow]Unsaved files[/yellow]",
             "\n".join(f"[yellow]{f}[/yellow]" for f in drift),
         )
+    console.print(table)
+
+
+def print_config_table(config: RegiswitchConfig) -> None:
+    """Render the current configuration."""
+    table = Table(title="regiswitch config", show_header=True, header_style="bold cyan")
+    table.add_column("Setting", style="bold")
+    table.add_column("Value")
+
+    storage = config.storage
+    if isinstance(storage, S3StorageConfig):
+        storage_label = f"s3://{storage.bucket}/{storage.prefix}" if storage.prefix else f"s3://{storage.bucket}"
+        table.add_row("storage.type", "s3")
+        table.add_row("storage.bucket", storage.bucket)
+        if storage.prefix:
+            table.add_row("storage.prefix", storage.prefix)
+        table.add_row("storage.region", storage.region)
+        table.add_row("storage", storage_label)
+    else:
+        assert isinstance(storage, LocalStorageConfig)
+        path_label = storage.path or ".regiswitch/profiles/ (default)"
+        table.add_row("storage.type", "local")
+        table.add_row("storage.path", path_label)
+
     console.print(table)

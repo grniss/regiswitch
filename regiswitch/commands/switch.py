@@ -8,7 +8,7 @@ import typer
 from regiswitch.core.engine import switch_profile
 from regiswitch.output.console import console, err_console
 from regiswitch.utils.errors import NotInitializedError, ProfileNotFoundError
-from regiswitch.utils.fs import find_project_root
+from regiswitch.utils.fs import find_project_root, load_storage_backend
 
 EXIT_OK = 0
 EXIT_INPUT_ERROR = 1
@@ -28,7 +28,8 @@ def switch(
     """
     try:
         root = find_project_root(Path.cwd())
-        applied = switch_profile(root, profile)
+        storage = load_storage_backend(root)
+        applied = switch_profile(root, profile, storage)
     except (NotInitializedError, ProfileNotFoundError) as exc:
         err_console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=EXIT_INPUT_ERROR)
