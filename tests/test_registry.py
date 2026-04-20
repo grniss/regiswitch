@@ -80,7 +80,7 @@ def test_register_stores_blob(reg, env_file):
     reg.register(str(env_file))
     sha = reg.stored_sha("dev", str(env_file))
     assert sha is not None
-    assert reg._blob_path(sha).exists()
+    assert reg._store.exists(sha)
 
 
 def test_register_deduplicates_identical_content(reg, tmp_path):
@@ -98,10 +98,7 @@ def test_register_deduplicates_identical_content(reg, tmp_path):
     sha1 = reg.stored_sha("dev", str(f1))
     sha2 = reg.stored_sha("dev", str(f2))
     assert sha1 == sha2
-
-    blobs = list(reg._blob_dir.rglob("*"))
-    blobs = [b for b in blobs if b.is_file()]
-    assert len(blobs) == 1
+    assert len(reg._store.list_all()) == 1
 
 
 def test_register_missing_file_raises(reg):
@@ -130,7 +127,7 @@ def test_unregister_gcs_orphaned_blob(reg, env_file):
     reg.register(str(env_file))
     sha = reg.stored_sha("dev", str(env_file))
     reg.unregister(str(env_file))
-    assert not reg._blob_path(sha).exists()
+    assert not reg._store.exists(sha)
 
 
 def test_unregister_keeps_shared_blob(reg, tmp_path):
@@ -148,7 +145,7 @@ def test_unregister_keeps_shared_blob(reg, tmp_path):
 
     reg.unregister(str(f1))
     # blob still referenced by prod's manifest for f2
-    assert reg._blob_path(sha).exists()
+    assert reg._store.exists(sha)
 
 
 # ------------------------------------------------------------------ snapshot

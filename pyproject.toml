@@ -13,7 +13,8 @@ dependencies = ["click>=8.0"]
 regiswitch = "regiswitch.cli:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0"]
+s3 = ["boto3>=1.26"]
+dev = ["pytest>=7.0", "boto3>=1.26", "moto[s3]>=4.0"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

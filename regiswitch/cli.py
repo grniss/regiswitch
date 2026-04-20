@@ -124,6 +124,71 @@ def switch(profile_name, force):
         click.echo(f"  skipped  {f}  (no stored version)")
 
 
+# ------------------------------------------------------------------ store
+
+@main.group()
+def store():
+    """Configure the blob store backend."""
+
+
+@store.command("status")
+def store_status():
+    """Show current store configuration."""
+    r = _reg()
+    cfg = r.store_config
+    kind = cfg.get("type", "local")
+    click.echo(f"Store type: {kind}")
+    if kind == "local":
+        click.echo(f"  path: {r._base / 'store'}")
+    elif kind == "s3":
+        click.echo(f"  bucket:       {cfg.get('bucket')}")
+        click.echo(f"  prefix:       {cfg.get('prefix', 'regiswitch/')}")
+        click.echo(f"  region:       {cfg.get('region') or '(default)'}")
+        click.echo(f"  endpoint_url: {cfg.get('endpoint_url') or '(default)'}")
+
+
+@store.command("use-local")
+@click.option("--migrate", is_flag=True, help="Copy blobs from current store to local store first.")
+def store_use_local(migrate):
+    """Switch to local filesystem store (~/.regiswitch/store/)."""
+    r = _reg()
+    if r.store_config.get("type") == "local":
+        click.echo("Already using local store.")
+        return
+    try:
+        n = r.set_store({"type": "local"}, migrate=migrate)
+    except Exception as e:
+        _bail(e)
+    msg = f"  ({n} blob(s) migrated)" if migrate else ""
+    click.echo(f"Switched to local store.{msg}")
+
+
+@store.command("use-s3")
+@click.option("--bucket", required=True, help="S3 bucket name.")
+@click.option("--prefix", default="regiswitch/", show_default=True, help="Key prefix inside the bucket.")
+@click.option("--region", default=None, help="AWS region (uses default chain if omitted).")
+@click.option("--endpoint-url", default=None, help="Custom endpoint URL (e.g. for MinIO).")
+@click.option("--migrate", is_flag=True, help="Copy existing blobs to S3 before switching.")
+def store_use_s3(bucket, prefix, region, endpoint_url, migrate):
+    """Switch to S3 blob store. Requires boto3 (pip install 'regiswitch[s3]')."""
+    r = _reg()
+    cfg = {
+        "type": "s3",
+        "bucket": bucket,
+        "prefix": prefix,
+    }
+    if region:
+        cfg["region"] = region
+    if endpoint_url:
+        cfg["endpoint_url"] = endpoint_url
+    try:
+        n = r.set_store(cfg, migrate=migrate)
+    except Exception as e:
+        _bail(e)
+    msg = f"  ({n} blob(s) migrated)" if migrate else ""
+    click.echo(f"Switched to S3 store (bucket: {bucket}).{msg}")
+
+
 # ------------------------------------------------------------------ status / list
 
 @main.command()

@@ -1,34 +1,37 @@
 import json
 import os
-import hashlib
-import shutil
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from regiswitch.store import Store, LocalStore, build_store
+
 
 def _default_config() -> dict:
-    return {"current_profile": None, "profiles": {}, "files": []}
+    return {
+        "current_profile": None,
+        "profiles": {},
+        "files": [],
+        "store": {"type": "local"},
+    }
 
 
 class Registry:
-    """
-    Profiles store manifests: { file_path: sha256 }.
-    Blobs live in a shared content-addressable store: base/store/<sha[:2]>/<sha[2:]>.
-    Identical content is stored once across all profiles.
-    """
-
     def __init__(self, base_dir: Optional[Path] = None):
         if base_dir is None:
             env = os.environ.get("REGISWITCH_DIR")
             base_dir = Path(env) if env else Path.home() / ".regiswitch"
         self._base = base_dir
         self._config_file = self._base / "config.json"
-        self._blob_dir = self._base / "store"
 
         if self._config_file.exists():
             self._cfg = json.loads(self._config_file.read_text())
         else:
             self._cfg = _default_config()
+
+        self._store: Store = build_store(
+            self._cfg.get("store", {"type": "local"}),
+            self._base / "store",
+        )
 
     # ------------------------------------------------------------------ persist
 
@@ -36,35 +39,13 @@ class Registry:
         self._base.mkdir(parents=True, exist_ok=True)
         self._config_file.write_text(json.dumps(self._cfg, indent=2))
 
-    # ------------------------------------------------------------------ blobs
-
-    def _blob_path(self, sha256: str) -> Path:
-        return self._blob_dir / sha256[:2] / sha256[2:]
-
-    def _store_blob(self, file_path: str) -> str:
-        data = Path(file_path).read_bytes()
-        sha256 = hashlib.sha256(data).hexdigest()
-        blob = self._blob_path(sha256)
-        if not blob.exists():
-            blob.parent.mkdir(parents=True, exist_ok=True)
-            blob.write_bytes(data)
-        return sha256
-
-    def _restore_blob(self, sha256: str, dest: str):
-        Path(dest).parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(self._blob_path(sha256), dest)
+    # ------------------------------------------------------------------ gc
 
     def _gc(self):
-        """Remove blobs unreferenced by any profile manifest."""
         referenced = {sha for m in self.profiles.values() for sha in m.values()}
-        if not self._blob_dir.exists():
-            return
-        for prefix_dir in list(self._blob_dir.iterdir()):
-            for blob in list(prefix_dir.iterdir()):
-                if (prefix_dir.name + blob.name) not in referenced:
-                    blob.unlink()
-            if not any(prefix_dir.iterdir()):
-                prefix_dir.rmdir()
+        for sha256 in list(self._store.list_all()):
+            if sha256 not in referenced:
+                self._store.delete(sha256)
 
     # ------------------------------------------------------------------ props
 
@@ -79,6 +60,10 @@ class Registry:
     @property
     def files(self) -> List[str]:
         return self._cfg.setdefault("files", [])
+
+    @property
+    def store_config(self) -> dict:
+        return self._cfg.get("store", {"type": "local"})
 
     # ------------------------------------------------------------------ profile
 
@@ -115,7 +100,7 @@ class Registry:
         if target not in self.files:
             self.files.append(target)
 
-        sha256 = self._store_blob(target)
+        sha256 = self._store.put(Path(target).read_bytes())
         self.profiles[profile][target] = sha256
         self._save()
 
@@ -138,7 +123,7 @@ class Registry:
         saved = []
         for fp in self.files:
             if Path(fp).exists():
-                sha256 = self._store_blob(fp)
+                sha256 = self._store.put(Path(fp).read_bytes())
                 self.profiles[profile][fp] = sha256
                 saved.append(fp)
         self._save()
@@ -162,12 +147,29 @@ class Registry:
             sha256 = manifest.get(fp)
             if sha256 is None:
                 continue
-            self._restore_blob(sha256, fp)
+            Path(fp).parent.mkdir(parents=True, exist_ok=True)
+            Path(fp).write_bytes(self._store.get(sha256))
             applied.append(fp)
 
         self._cfg["current_profile"] = profile
         self._save()
         return applied, missing
+
+    # ------------------------------------------------------------------ store management
+
+    def set_store(self, store_cfg: dict, migrate: bool = False) -> int:
+        """
+        Reconfigure the backend store. If migrate=True, transfers all existing
+        blobs to the new store before switching. Returns count of blobs migrated.
+        """
+        new_store = build_store(store_cfg, self._base / "store")
+        migrated = 0
+        if migrate:
+            migrated = self._store.migrate_to(new_store)
+        self._cfg["store"] = store_cfg
+        self._store = new_store
+        self._save()
+        return migrated
 
     # ------------------------------------------------------------------ query
 
