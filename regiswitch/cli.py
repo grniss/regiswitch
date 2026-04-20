@@ -6,6 +6,10 @@ def _reg() -> Registry:
     return Registry()
 
 
+def _bail(e: Exception):
+    raise click.ClickException(str(e))
+
+
 @click.group()
 @click.version_option()
 def main():
@@ -24,7 +28,10 @@ def profile():
 def profile_add(name):
     """Create a new profile."""
     r = _reg()
-    r.profile_add(name)
+    try:
+        r.profile_add(name)
+    except ValueError as e:
+        _bail(e)
     active = " (now active)" if r.current_profile == name else ""
     click.echo(f"Profile '{name}' created{active}.")
 
@@ -46,7 +53,10 @@ def profile_list():
 def profile_rm(name):
     """Delete a profile and its stored files."""
     r = _reg()
-    r.profile_remove(name)
+    try:
+        r.profile_remove(name)
+    except ValueError as e:
+        _bail(e)
     click.echo(f"Profile '{name}' removed.")
 
 
@@ -58,7 +68,10 @@ def profile_rm(name):
 def register(file, profile):
     """Register a file and snapshot it into a profile."""
     r = _reg()
-    r.register(file, profile)
+    try:
+        r.register(file, profile)
+    except (ValueError, FileNotFoundError) as e:
+        _bail(e)
     used = profile or r.current_profile
     click.echo(f"Registered '{file}' in profile '{used}'.")
 
@@ -79,10 +92,13 @@ def unregister(file):
 def snapshot(profile):
     """Save current state of all registered files into a profile."""
     r = _reg()
-    saved = r.snapshot(profile)
+    try:
+        saved = r.snapshot(profile)
+    except ValueError as e:
+        _bail(e)
     used = profile or r.current_profile
     if not saved:
-        click.echo(f"No registered files found on disk.")
+        click.echo("No registered files found on disk.")
         return
     click.echo(f"Snapshot saved to profile '{used}':")
     for f in saved:
@@ -97,7 +113,10 @@ def snapshot(profile):
 def switch(profile_name, force):
     """Switch to a profile, replacing registered files with stored versions."""
     r = _reg()
-    applied, skipped = r.switch(profile_name, force=force)
+    try:
+        applied, skipped = r.switch(profile_name, force=force)
+    except ValueError as e:
+        _bail(e)
     click.echo(f"Switched to profile '{profile_name}'.")
     for f in applied:
         click.echo(f"  applied  {f}")
@@ -116,10 +135,7 @@ def status():
     click.echo(f"Profiles: {', '.join(r.profiles) or '(none)'}")
     click.echo(f"Registered files: {len(r.files)}")
     for fp in r.files:
-        parts = []
-        for p in r.profiles:
-            if r.has_stored(p, fp):
-                parts.append(p)
+        parts = [p for p in r.profiles if r.has_stored(p, fp)]
         stored = f"[{', '.join(parts)}]" if parts else "[no snapshots]"
         click.echo(f"  {fp}  {stored}")
 

@@ -1,19 +1,9 @@
 import json
-import shutil
+import os
 import hashlib
+import shutil
 from pathlib import Path
-from typing import List, Optional
-
-CONFIG_DIR = Path.home() / ".regiswitch"
-CONFIG_FILE = CONFIG_DIR / "config.json"
-STORE_DIR = CONFIG_DIR / "profiles"
-
-
-def _store_path(profile: str, file_path: str) -> Path:
-    # Unique filename: short hash of full path + original basename
-    digest = hashlib.sha256(file_path.encode()).hexdigest()[:12]
-    name = f"{digest}_{Path(file_path).name}"
-    return STORE_DIR / profile / name
+from typing import Dict, List, Optional, Tuple
 
 
 def _default_config() -> dict:
@@ -21,15 +11,60 @@ def _default_config() -> dict:
 
 
 class Registry:
-    def __init__(self):
-        if CONFIG_FILE.exists():
-            self._cfg = json.loads(CONFIG_FILE.read_text())
+    """
+    Profiles store manifests: { file_path: sha256 }.
+    Blobs live in a shared content-addressable store: base/store/<sha[:2]>/<sha[2:]>.
+    Identical content is stored once across all profiles.
+    """
+
+    def __init__(self, base_dir: Optional[Path] = None):
+        if base_dir is None:
+            env = os.environ.get("REGISWITCH_DIR")
+            base_dir = Path(env) if env else Path.home() / ".regiswitch"
+        self._base = base_dir
+        self._config_file = self._base / "config.json"
+        self._blob_dir = self._base / "store"
+
+        if self._config_file.exists():
+            self._cfg = json.loads(self._config_file.read_text())
         else:
             self._cfg = _default_config()
 
+    # ------------------------------------------------------------------ persist
+
     def _save(self):
-        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-        CONFIG_FILE.write_text(json.dumps(self._cfg, indent=2))
+        self._base.mkdir(parents=True, exist_ok=True)
+        self._config_file.write_text(json.dumps(self._cfg, indent=2))
+
+    # ------------------------------------------------------------------ blobs
+
+    def _blob_path(self, sha256: str) -> Path:
+        return self._blob_dir / sha256[:2] / sha256[2:]
+
+    def _store_blob(self, file_path: str) -> str:
+        data = Path(file_path).read_bytes()
+        sha256 = hashlib.sha256(data).hexdigest()
+        blob = self._blob_path(sha256)
+        if not blob.exists():
+            blob.parent.mkdir(parents=True, exist_ok=True)
+            blob.write_bytes(data)
+        return sha256
+
+    def _restore_blob(self, sha256: str, dest: str):
+        Path(dest).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(self._blob_path(sha256), dest)
+
+    def _gc(self):
+        """Remove blobs unreferenced by any profile manifest."""
+        referenced = {sha for m in self.profiles.values() for sha in m.values()}
+        if not self._blob_dir.exists():
+            return
+        for prefix_dir in list(self._blob_dir.iterdir()):
+            for blob in list(prefix_dir.iterdir()):
+                if (prefix_dir.name + blob.name) not in referenced:
+                    blob.unlink()
+            if not any(prefix_dir.iterdir()):
+                prefix_dir.rmdir()
 
     # ------------------------------------------------------------------ props
 
@@ -38,14 +73,14 @@ class Registry:
         return self._cfg.get("current_profile")
 
     @property
-    def profiles(self) -> dict:
+    def profiles(self) -> Dict[str, Dict[str, str]]:
         return self._cfg.setdefault("profiles", {})
 
     @property
     def files(self) -> List[str]:
         return self._cfg.setdefault("files", [])
 
-    # ---------------------------------------------------------- profile ops
+    # ------------------------------------------------------------------ profile
 
     def profile_add(self, name: str):
         if name in self.profiles:
@@ -58,15 +93,13 @@ class Registry:
     def profile_remove(self, name: str):
         if name not in self.profiles:
             raise ValueError(f"Profile '{name}' does not exist")
-        store = STORE_DIR / name
-        if store.exists():
-            shutil.rmtree(store)
         del self.profiles[name]
         if self.current_profile == name:
             self._cfg["current_profile"] = next(iter(self.profiles), None)
+        self._gc()
         self._save()
 
-    # ---------------------------------------------------------- file ops
+    # ------------------------------------------------------------------ files
 
     def register(self, file_path: str, profile: Optional[str] = None):
         target = str(Path(file_path).resolve())
@@ -82,20 +115,20 @@ class Registry:
         if target not in self.files:
             self.files.append(target)
 
-        self._copy_to_store(profile, target)
+        sha256 = self._store_blob(target)
+        self.profiles[profile][target] = sha256
         self._save()
 
     def unregister(self, file_path: str):
         target = str(Path(file_path).resolve())
         if target in self.files:
             self.files.remove(target)
-            for profile in self.profiles:
-                sp = _store_path(profile, target)
-                if sp.exists():
-                    sp.unlink()
+            for manifest in self.profiles.values():
+                manifest.pop(target, None)
+        self._gc()
         self._save()
 
-    def snapshot(self, profile: Optional[str] = None):
+    def snapshot(self, profile: Optional[str] = None) -> List[str]:
         profile = profile or self.current_profile
         if not profile:
             raise ValueError("No active profile")
@@ -105,16 +138,18 @@ class Registry:
         saved = []
         for fp in self.files:
             if Path(fp).exists():
-                self._copy_to_store(profile, fp)
+                sha256 = self._store_blob(fp)
+                self.profiles[profile][fp] = sha256
                 saved.append(fp)
         self._save()
         return saved
 
-    def switch(self, profile: str, force: bool = False):
+    def switch(self, profile: str, force: bool = False) -> Tuple[List[str], List[str]]:
         if profile not in self.profiles:
             raise ValueError(f"Profile '{profile}' does not exist")
 
-        missing = [fp for fp in self.files if not _store_path(profile, fp).exists()]
+        manifest = self.profiles[profile]
+        missing = [fp for fp in self.files if fp not in manifest]
         if missing and not force:
             raise ValueError(
                 f"Profile '{profile}' has no stored version for:\n"
@@ -124,23 +159,20 @@ class Registry:
 
         applied = []
         for fp in self.files:
-            sp = _store_path(profile, fp)
-            if not sp.exists():
+            sha256 = manifest.get(fp)
+            if sha256 is None:
                 continue
-            Path(fp).parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(sp, fp)
+            self._restore_blob(sha256, fp)
             applied.append(fp)
 
         self._cfg["current_profile"] = profile
         self._save()
         return applied, missing
 
-    # ---------------------------------------------------------- helpers
-
-    def _copy_to_store(self, profile: str, file_path: str):
-        sp = _store_path(profile, file_path)
-        sp.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(file_path, sp)
+    # ------------------------------------------------------------------ query
 
     def has_stored(self, profile: str, file_path: str) -> bool:
-        return _store_path(profile, file_path).exists()
+        return file_path in self.profiles.get(profile, {})
+
+    def stored_sha(self, profile: str, file_path: str) -> Optional[str]:
+        return self.profiles.get(profile, {}).get(file_path)
