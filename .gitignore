@@ -1,5 +1,6 @@
 # Regiswitch internal data
 .regiswitch/
+.regiswitch.yaml
 
 # Python
 __pycache__/
