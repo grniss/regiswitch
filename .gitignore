@@ -1,21 +1,30 @@
-# If you prefer the allow list template instead of the deny list, see community template:
-# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
-#
-# Binaries for programs and plugins
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
+# Regiswitch internal data
+.regiswitch/
+.regiswitch.yaml
 
-# Test binary, built with `go test -c`
-*.test
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.venv/
+venv/
+env/
+dist/
+build/
+*.egg-info/
 
-# Output of the go coverage tool, specifically when used with LiteIDE
-*.out
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
 
-# Dependency directories (remove the comment below to include it)
-# vendor/
+# OS
+.DS_Store
 
-# Go workspace file
-go.work
+# Multica Agent
+.agent_context/
+AGENTS.md
+GEMINI.md
