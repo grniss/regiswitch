@@ -3,7 +3,7 @@ import yaml
 import shutil
 
 CONFIG_FILE = ".regiswitch.yaml"
-STORAGE_DIR = ".regiswitch/versions"
+STORAGE_DIR = ".regiswitch/profiles"
 
 class ConfigManager:
     def __init__(self, config_file=CONFIG_FILE, storage_dir=STORAGE_DIR):
@@ -79,23 +79,21 @@ class ConfigManager:
         self.save()
         return True, None
 
-    def add_file_version(self, file_path, profile_name, version_id):
+    def add_file_to_profile(self, file_path, profile_name):
         if profile_name not in self.config["profiles"]:
             return False, f"Profile '{profile_name}' does not exist."
         if not os.path.exists(file_path):
             return False, f"File '{file_path}' does not exist."
         
-        # Store file
-        dest = os.path.join(self.storage_dir, version_id, file_path)
+        # Store file in profile-specific storage
+        dest = os.path.join(self.storage_dir, profile_name, file_path)
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         shutil.copy2(file_path, dest)
         
-        self.config["profiles"][profile_name]["files"][file_path] = version_id
+        # We store True just to mark the file as managed by this profile
+        self.config["profiles"][profile_name]["files"][file_path] = True
         self.save()
         return True, None
-
-    def get_file_version_source(self, version_id, file_path):
-        return os.path.join(self.storage_dir, version_id, file_path)
 
     def apply_profile(self, profile_name):
         if profile_name not in self.config["profiles"]:
@@ -103,15 +101,15 @@ class ConfigManager:
         
         profile = self.config["profiles"][profile_name]
         results = []
-        for file_path, version_id in profile.get("files", {}).items():
-            src = self.get_file_version_source(version_id, file_path)
+        for file_path in profile.get("files", {}).keys():
+            src = os.path.join(self.storage_dir, profile_name, file_path)
             if not os.path.exists(src):
-                results.append((file_path, version_id, False))
+                results.append((file_path, False))
                 continue
             
             os.makedirs(os.path.dirname(os.path.abspath(file_path)), exist_ok=True)
             shutil.copy2(src, file_path)
-            results.append((file_path, version_id, True))
+            results.append((file_path, True))
         
         self.set_active_profile_name(profile_name)
         return True, results

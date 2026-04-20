@@ -29,7 +29,7 @@ class TestProfileSwitching(unittest.TestCase):
             f.write("version 1")
         
         # Add to default profile
-        self.controller.add_file(file_path, "default", "v1")
+        self.controller.add_file(file_path, "default")
         
         # Create another profile
         self.controller.add_profile("dev", "Development profile")
@@ -37,7 +37,7 @@ class TestProfileSwitching(unittest.TestCase):
         # Change file content and add to dev profile
         with open(file_path, "w") as f:
             f.write("version 2")
-        self.controller.add_file(file_path, "dev", "v2")
+        self.controller.add_file(file_path, "dev")
         
         # Switch back to default
         self.controller.use_profile("default")
@@ -70,7 +70,7 @@ class TestProfileSwitching(unittest.TestCase):
         file_path = "list_test.txt"
         with open(file_path, "w") as f:
             f.write("content")
-        self.controller.add_file(file_path, "default", "v1")
+        self.controller.add_file(file_path, "default")
         
         self.controller.list_files() # Should not raise error
 

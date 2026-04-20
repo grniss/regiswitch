@@ -43,11 +43,11 @@ class RegiswitchController:
         self._ensure_initialized()
         success, results = self.model.apply_profile(name)
         if success:
-            for file_path, version_id, applied in results:
+            for file_path, applied in results:
                 if applied:
-                    self.view.show_message(f"Updated {file_path} to version {version_id}")
+                    self.view.show_message(f"Updated {file_path}")
                 else:
-                    self.view.show_message(f"Warning: Version '{version_id}' for file '{file_path}' not found in storage. Skipping.")
+                    self.view.show_message(f"Warning: File '{file_path}' not found in profile '{name}'. Skipping.")
             self.view.show_message(f"Switched to profile '{name}'.")
         else:
             self.view.show_error(results)
@@ -64,14 +64,14 @@ class RegiswitchController:
             files_data[file_path] = {}
             for profile_name, data in profiles.items():
                 if file_path in data.get("files", {}):
-                    files_data[file_path][profile_name] = data["files"][file_path]
+                    files_data[file_path][profile_name] = "YES" # Just mark as present
         
         self.view.show_files(files_data, sorted(profiles.keys()))
 
-    def add_file(self, file_path, profile_name, version_id):
+    def add_file(self, file_path, profile_name):
         self._ensure_initialized()
-        success, error = self.model.add_file_version(file_path, profile_name, version_id)
+        success, error = self.model.add_file_to_profile(file_path, profile_name)
         if success:
-            self.view.show_message(f"Added '{file_path}' (version {version_id}) to profile '{profile_name}'.")
+            self.view.show_message(f"Added '{file_path}' to profile '{profile_name}'.")
         else:
             self.view.show_error(error)

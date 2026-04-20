@@ -9,7 +9,7 @@ def get_controller():
     return RegiswitchController(model, view)
 
 def main():
-    parser = argparse.ArgumentParser(prog="regiswitch", description="regiswitch - Manage file versions across profiles")
+    parser = argparse.ArgumentParser(prog="regiswitch", description="regiswitch - Manage files across profiles")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # init command
@@ -33,12 +33,11 @@ def main():
     # file commands
     file_parser = subparsers.add_parser("file", help="File management commands")
     file_subparsers = file_parser.add_subparsers(dest="subcommand", help="File subcommands")
-    file_subparsers.add_parser("list", help="List all registered files and their versions")
+    file_subparsers.add_parser("list", help="List all registered files")
     
-    add_file_parser = file_subparsers.add_parser("add", help="Add a file version to a profile")
+    add_file_parser = file_subparsers.add_parser("add", help="Add a file to a profile")
     add_file_parser.add_argument("path", help="Path to the file")
     add_file_parser.add_argument("profile", help="Profile name")
-    add_file_parser.add_argument("version", help="Version identifier")
 
     args = parser.parse_args()
     controller = get_controller()
@@ -60,7 +59,7 @@ def main():
         if args.subcommand == "list":
             controller.list_files()
         elif args.subcommand == "add":
-            controller.add_file(args.path, args.profile, args.version)
+            controller.add_file(args.path, args.profile)
         else:
             file_parser.print_help()
     else:
