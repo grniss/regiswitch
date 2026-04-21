@@ -1,0 +1,4 @@
+{
+  "prod": "profiles/prod",
+  "dev": "profiles/dev"
+}
