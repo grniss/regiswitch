@@ -1,0 +1,12 @@
+README.md
+pyproject.toml
+src/regiswitch/__init__.py
+src/regiswitch/__main__.py
+src/regiswitch/cli.py
+src/regiswitch.egg-info/PKG-INFO
+src/regiswitch.egg-info/SOURCES.txt
+src/regiswitch.egg-info/dependency_links.txt
+src/regiswitch.egg-info/entry_points.txt
+src/regiswitch.egg-info/requires.txt
+src/regiswitch.egg-info/top_level.txt
+tests/test_cli.py
