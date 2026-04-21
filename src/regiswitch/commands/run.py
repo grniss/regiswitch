@@ -1,6 +1,6 @@
 import typer
-from output.console import console
-from core.engine import SwitchEngine
+from regiswitch.output.console import console
+from regiswitch.core.engine import SwitchEngine
 
 def run(profile_name: str):
     """Switch to a specific profile"""

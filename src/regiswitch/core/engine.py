@@ -1,6 +1,6 @@
 from pathlib import Path
 from typing import List
-from models.config import FileMapping
+from regiswitch.models.config import FileMapping
 
 class SwitchEngine:
     @staticmethod
