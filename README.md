@@ -5,7 +5,8 @@ A Python CLI tool to switch registered files between named profiles. Useful for 
 ## Install
 
 ```bash
-pip install -e .
+pip install -e .          # local storage (default)
+pip install -e ".[s3]"    # include AWS S3 support
 ```
 
 ## Quick Start
@@ -34,7 +35,7 @@ regiswitch switch personal
 
 | Command | Description |
 |---|---|
-| `regiswitch init` | Initialize the registry at `~/.config/regiswitch/` |
+| `regiswitch init` | Initialize the registry at the configured storage location |
 | `regiswitch profile create <name>` | Create a new profile |
 | `regiswitch profile list` | List all profiles |
 | `regiswitch profile delete <name>` | Delete a profile and its stored files |
@@ -43,11 +44,42 @@ regiswitch switch personal
 | `regiswitch switch <profile>` | Switch active profile — restores all registered files from that profile |
 | `regiswitch save [profile]` | Snapshot current on-disk file state into a profile (default: active) |
 | `regiswitch status` | Show the active profile and all registered files |
+| `regiswitch backend show` | Show the current storage backend configuration |
+| `regiswitch backend local [--path PATH]` | Use local filesystem storage (optionally at a custom path) |
+| `regiswitch backend s3 --bucket BUCKET` | Use AWS S3 storage |
+
+## Storage Backends
+
+regiswitch supports pluggable storage backends. The active backend is configured in `~/.config/regiswitch/backend.toml`.
+
+### Local (default)
+
+Files are stored at `~/.config/regiswitch/` by default.
+
+```bash
+# Use the default path
+regiswitch backend local
+
+# Use a custom path (e.g. Dropbox, network share, or any directory)
+regiswitch backend local --path ~/Dropbox/regiswitch
+regiswitch init
+```
+
+### AWS S3
+
+Profile snapshots and the registry are stored in an S3 bucket. AWS credentials are resolved via the standard boto3 chain (env vars, `~/.aws/credentials`, IAM role, etc.).
+
+```bash
+# Requires: pip install regiswitch[s3]
+regiswitch backend s3 --bucket my-regiswitch-bucket --region us-east-1
+regiswitch backend s3 --bucket my-bucket --prefix configs/ --region eu-west-1
+regiswitch init
+```
 
 ## How It Works
 
-- **Registry** — stored at `~/.config/regiswitch/registry.toml`, tracks which files are managed and which profile is active.
-- **Profile storage** — each profile keeps its own copy of every registered file under `~/.config/regiswitch/profiles/<name>/`.
+- **Registry** — tracks which files are managed and which profile is active. Stored as `registry.toml` at the backend location.
+- **Profile storage** — each profile keeps its own copy of every registered file. For local backends, under `<storage-path>/profiles/<name>/`; for S3, under `s3://<bucket>/<prefix>profiles/<name>/`.
 - **Register** — adds a file to the registry and copies its current content into every existing profile.
 - **Save** — snapshots the current on-disk content of all registered files into the target profile.
 - **Switch** — copies the target profile's stored file versions back onto disk, then marks that profile as active.
@@ -58,3 +90,4 @@ regiswitch switch personal
 - [Rich](https://rich.readthedocs.io/) — terminal output (tables, panels)
 - [Pydantic v2](https://docs.pydantic.dev/) — data validation and config models
 - `tomllib` / `tomli-w` — TOML config persistence
+- [boto3](https://boto3.amazonaws.com/v1/documentation/api/latest/index.html) — AWS S3 backend (optional)

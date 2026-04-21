@@ -1,8 +1,8 @@
 import typer
 
-from regiswitch.core.registry import init_registry, is_initialized
+from regiswitch.core.backends import get_backend
 from regiswitch.output.console import console
-from regiswitch.utils.fs import REGISTRY_FILE
+from regiswitch.utils.errors import RegiswitchError
 
 app = typer.Typer()
 
@@ -13,13 +13,18 @@ def init(
 ) -> None:
     """Initialize the regiswitch registry.
 
-    Creates the config directory and registry file at ~/.config/regiswitch/.
+    Creates the storage directory and registry file. The storage location
+    depends on the configured backend (local path or S3 bucket).
     """
-    if is_initialized() and not force:
-        console.print("[yellow]Registry already initialized.[/yellow]")
-        console.print(f"Config: [dim]{REGISTRY_FILE}[/dim]")
-        console.print("Use [bold]--force[/bold] to re-initialize.")
-        raise typer.Exit(code=0)
-    init_registry()
-    console.print("[green]Registry initialized.[/green]")
-    console.print(f"Config: [dim]{REGISTRY_FILE}[/dim]")
+    try:
+        backend = get_backend()
+        if backend.is_initialized() and not force:
+            console.print("[yellow]Registry already initialized.[/yellow]")
+            console.print("Use [bold]--force[/bold] to re-initialize.")
+            raise typer.Exit(code=0)
+        backend.init()
+        console.print("[green]Registry initialized.[/green]")
+    except RegiswitchError as e:
+        from regiswitch.output.console import err_console
+        err_console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(code=2)
