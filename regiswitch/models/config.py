@@ -27,3 +27,4 @@ class Registry(BaseModel):
     current_profile: Optional[str] = None
     profiles: dict[str, ProfileMeta] = {}
     files: dict[str, RegisteredFile] = {}
+    auto_save: bool = False

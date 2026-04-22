@@ -1,6 +1,7 @@
 import typer
 
 from regiswitch.commands.backend import app as backend_app
+from regiswitch.commands import config as config_commands
 from regiswitch.commands.init import init
 from regiswitch.commands.profile import app as profile_app
 from regiswitch.commands.register import register, unregister
@@ -17,6 +18,7 @@ app = typer.Typer(
 app.command("init")(init)
 app.add_typer(profile_app, name="profile")
 app.add_typer(backend_app, name="backend")
+app.add_typer(config_commands.app, name="config")
 app.command("register")(register)
 app.command("unregister")(unregister)
 app.command("switch")(switch)

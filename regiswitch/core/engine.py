@@ -82,11 +82,23 @@ def unregister_file(file_path: Path, backend: StorageBackend | None = None) -> R
     return registry
 
 
-def switch_profile(name: str, backend: StorageBackend | None = None) -> Registry:
+def switch_profile(
+    name: str,
+    backend: StorageBackend | None = None,
+    auto_save: bool | None = None,
+) -> Registry:
     b = _b(backend)
     registry = b.load_registry()
     if name not in registry.profiles:
         raise ProfileNotFoundError(name)
+
+    # Determine effective auto_save
+    should_save = auto_save if auto_save is not None else registry.auto_save
+
+    # Auto-save current profile before switching
+    if should_save and registry.current_profile:
+        save_to_profile(registry.current_profile, backend=b)
+
     for file_path in registry.files:
         path = Path(file_path)
         if b.has_stored_version(name, path):
@@ -123,3 +135,11 @@ def list_files(
     if registry is None:
         registry = _b(backend).load_registry()
     return list(registry.files.values())
+
+
+def set_auto_save(enabled: bool, backend: StorageBackend | None = None) -> Registry:
+    b = _b(backend)
+    registry = b.load_registry()
+    registry.auto_save = enabled
+    b.save_registry(registry)
+    return registry

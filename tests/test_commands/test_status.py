@@ -33,3 +33,20 @@ def test_status_shows_registered_files(backend: LocalBackend, sample_file: Path)
 def test_status_not_initialized(backend: LocalBackend):
     result = runner.invoke(app, ["status"])
     assert result.exit_code == 1
+
+
+def test_status_shows_auto_save_disabled(backend: LocalBackend):
+    backend.init()
+    result = runner.invoke(app, ["status"])
+    assert result.exit_code == 0
+    assert "Auto-save" in result.output
+    assert "disabled" in result.output
+
+
+def test_status_shows_auto_save_enabled(backend: LocalBackend):
+    backend.init()
+    runner.invoke(app, ["config", "auto-save", "--enable"])
+    result = runner.invoke(app, ["status"])
+    assert result.exit_code == 0
+    assert "Auto-save" in result.output
+    assert "enabled" in result.output

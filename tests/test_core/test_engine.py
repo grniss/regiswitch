@@ -9,6 +9,7 @@ from regiswitch.core.engine import (
     list_profiles,
     register_file,
     save_to_profile,
+    set_auto_save,
     switch_profile,
     unregister_file,
 )
@@ -165,3 +166,96 @@ class TestListFiles:
         files = list_files(backend=initialized_backend)
         assert len(files) == 1
         assert files[0].path == str(sample_file)
+
+
+class TestSwitchProfileAutoSave:
+    def test_switch_profile_auto_saves_when_registry_flag_set(
+        self, initialized_backend: LocalBackend, sample_file: Path
+    ):
+        """Auto-save=True on registry saves current profile before switching."""
+        create_profile("a", backend=initialized_backend)
+        create_profile("b", backend=initialized_backend)
+        switch_profile("a", backend=initialized_backend)
+        register_file(sample_file, backend=initialized_backend)
+        # Enable auto-save
+        set_auto_save(True, backend=initialized_backend)
+        # Modify file on disk
+        sample_file.write_text("modified-in-a")
+        # Switch to b — should auto-save "a" first
+        switch_profile("b", backend=initialized_backend)
+        # The stored copy for profile "a" should now reflect the modification
+        stored = initialized_backend._stored_path("a", sample_file)
+        assert stored.read_text() == "modified-in-a"
+
+    def test_switch_profile_skips_save_by_default(
+        self, initialized_backend: LocalBackend, sample_file: Path
+    ):
+        """Auto-save=False (default) does not update stored copy on switch."""
+        create_profile("a", backend=initialized_backend)
+        create_profile("b", backend=initialized_backend)
+        switch_profile("a", backend=initialized_backend)
+        register_file(sample_file, backend=initialized_backend)
+        # Store a known version
+        initialized_backend.copy_to_profile(sample_file, "a")
+        original_content = sample_file.read_text()
+        # Modify file but do NOT enable auto-save
+        sample_file.write_text("modified-not-saved")
+        switch_profile("b", backend=initialized_backend)
+        # Stored copy for "a" should still be the original
+        stored = initialized_backend._stored_path("a", sample_file)
+        assert stored.read_text() == original_content
+
+    def test_switch_profile_override_true_forces_save(
+        self, initialized_backend: LocalBackend, sample_file: Path
+    ):
+        """Passing auto_save=True overrides registry auto_save=False."""
+        create_profile("a", backend=initialized_backend)
+        create_profile("b", backend=initialized_backend)
+        switch_profile("a", backend=initialized_backend)
+        register_file(sample_file, backend=initialized_backend)
+        # registry auto_save is False by default
+        sample_file.write_text("forced-save")
+        switch_profile("b", backend=initialized_backend, auto_save=True)
+        stored = initialized_backend._stored_path("a", sample_file)
+        assert stored.read_text() == "forced-save"
+
+    def test_switch_profile_override_false_skips_save(
+        self, initialized_backend: LocalBackend, sample_file: Path
+    ):
+        """Passing auto_save=False overrides registry auto_save=True."""
+        create_profile("a", backend=initialized_backend)
+        create_profile("b", backend=initialized_backend)
+        switch_profile("a", backend=initialized_backend)
+        register_file(sample_file, backend=initialized_backend)
+        set_auto_save(True, backend=initialized_backend)
+        original_content = sample_file.read_text()
+        initialized_backend.copy_to_profile(sample_file, "a")
+        sample_file.write_text("should-not-be-saved")
+        switch_profile("b", backend=initialized_backend, auto_save=False)
+        stored = initialized_backend._stored_path("a", sample_file)
+        assert stored.read_text() == original_content
+
+    def test_switch_profile_no_current_profile_skips_save(
+        self, initialized_backend: LocalBackend
+    ):
+        """Auto-save with no current_profile set does not raise an error."""
+        create_profile("a", backend=initialized_backend)
+        set_auto_save(True, backend=initialized_backend)
+        # No current profile — switching should succeed silently
+        registry = switch_profile("a", backend=initialized_backend)
+        assert registry.current_profile == "a"
+
+
+class TestSetAutoSave:
+    def test_set_auto_save_enables(self, initialized_backend: LocalBackend):
+        """set_auto_save(True) persists auto_save=True to backend."""
+        set_auto_save(True, backend=initialized_backend)
+        registry = initialized_backend.load_registry()
+        assert registry.auto_save is True
+
+    def test_set_auto_save_disables(self, initialized_backend: LocalBackend):
+        """set_auto_save(False) after True persists auto_save=False."""
+        set_auto_save(True, backend=initialized_backend)
+        set_auto_save(False, backend=initialized_backend)
+        registry = initialized_backend.load_registry()
+        assert registry.auto_save is False

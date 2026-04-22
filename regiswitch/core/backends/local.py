@@ -48,6 +48,7 @@ class LocalBackend(StorageBackend):
         self.storage_path.mkdir(parents=True, exist_ok=True)
         raw: dict = {
             "current_profile": registry.current_profile or "",
+            "auto_save": registry.auto_save,
             "profiles": {
                 name: {"created_at": meta.created_at.isoformat()}
                 for name, meta in registry.profiles.items()

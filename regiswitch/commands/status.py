@@ -17,6 +17,8 @@ def status() -> None:
         registry = load_registry()
         active = registry.current_profile or "[dim]none[/dim]"
         console.print(Panel(f"Active profile: [bold cyan]{active}[/bold cyan]", title="regiswitch"))
+        auto_save_status = "[green]enabled[/green]" if registry.auto_save else "[yellow]disabled[/yellow]"
+        console.print(f"Auto-save: {auto_save_status}")
 
         profiles = list_profiles(registry)
         if profiles:
