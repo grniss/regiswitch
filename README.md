@@ -42,11 +42,34 @@ regiswitch switch personal
 | `regiswitch register <path>` | Register a file — copies it into all existing profiles |
 | `regiswitch unregister <path>` | Remove a file from the registry (does not delete from disk) |
 | `regiswitch switch <profile>` | Switch active profile — restores all registered files from that profile |
+| `regiswitch switch <profile> --auto-save` | Save current profile before switching (one-time override) |
+| `regiswitch switch <profile> --no-auto-save` | Skip auto-save for this switch even if enabled globally |
 | `regiswitch save [profile]` | Snapshot current on-disk file state into a profile (default: active) |
-| `regiswitch status` | Show the active profile and all registered files |
+| `regiswitch status` | Show the active profile, auto-save setting, and all registered files |
+| `regiswitch config auto-save --enable` | Enable auto-save globally — always save before switching |
+| `regiswitch config auto-save --disable` | Disable auto-save globally |
 | `regiswitch backend show` | Show the current storage backend configuration |
 | `regiswitch backend local [--path PATH]` | Use local filesystem storage (optionally at a custom path) |
 | `regiswitch backend s3 --bucket BUCKET` | Use AWS S3 storage |
+
+## Auto-Save
+
+By default, switching profiles replaces files on disk without saving the current state first. Enable auto-save to always snapshot the active profile before switching.
+
+```bash
+# Enable globally — saved across sessions
+regiswitch config auto-save --enable
+
+# Now switching auto-saves first
+regiswitch switch personal   # saves "work" profile, then switches
+
+# Override per-invocation
+regiswitch switch personal --no-auto-save   # skip this time
+regiswitch switch work --auto-save          # force save even if disabled globally
+
+# Check current setting
+regiswitch status   # shows "Auto-save: enabled" or "Auto-save: disabled"
+```
 
 ## Storage Backends
 
@@ -83,6 +106,7 @@ regiswitch init
 - **Register** — adds a file to the registry and copies its current content into every existing profile.
 - **Save** — snapshots the current on-disk content of all registered files into the target profile.
 - **Switch** — copies the target profile's stored file versions back onto disk, then marks that profile as active.
+- **Auto-save** — when enabled, automatically saves the current profile before every switch so in-flight changes are never lost.
 
 ## Tech Stack
 
