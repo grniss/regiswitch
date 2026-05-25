@@ -1,5 +1,7 @@
 # regiswitch
 
+## PoC to utilize Claude code via MD file
+
 Switch registered files between named profiles.
 
 Manage multiple versions of configuration files (`.env`, `config.toml`, etc.) across named profiles — think of it as "git stash for config files".
